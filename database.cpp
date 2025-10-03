@@ -7,7 +7,7 @@
 #include <vector>
 #include <iostream>
 
-#include "bplustree_new.hpp"
+#include "bplustree.hpp"
 
 using std::vector;
 
@@ -53,5 +53,9 @@ int main() {
 
     BPlusNode n( BNodeType::LEAF);
     n = n.InsertKV(vector<uint8_t>{'a', 'b', 'c'}, vector<uint8_t>{'d', 'e', 'f'});
+    n = n.InsertKV(vector<uint8_t>{'a', 'c', 'c'}, vector<uint8_t>{'d', 'e', 'f'});
+    n = n.InsertKV(vector<uint8_t>{'a', 'a', 'c'}, vector<uint8_t>{'d', 'e', 'f'});
+    n = n.UpdateKV(vector<uint8_t>{'a', 'a', 'c'}, vector<uint8_t>{'d', 'g', 'f'});
+    n = n.DeleteKV(vector<uint8_t>{'a', 'b', 'c'});
     n.PrintNodeData();
 }

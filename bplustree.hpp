@@ -1,77 +1,38 @@
-#include <cstdint>
-#include <map>
-#include <string>
-#include <tuple>
-#include <vector>
-#define PAGE_SIZE 512
-#define MAX_KEY_SIZE 1024
-#define MAX_VAL_SIZE 1024
-#define FANOUT 100
 
-enum NodeType {
+#include <cstdint>
+#include <vector>
+
+using std::vector;
+
+#define BNODE_PAGE_SIZE 4096
+
+enum BNodeType : uint8_t {
     NODE,
     LEAF
 };
 
-class EncodedBNode {
+class BPlusNode {
     public:
-        std::vector<uint8_t> data;
-        EncodedBNode(uint16_t buffer_size);
-        void setHeader(uint8_t type, uint16_t nkeys);
-        uint8_t getType();
-        uint16_t nKeys();
-        uint64_t getPointer(uint16_t index);
-        void setPointer(uint16_t index, uint64_t ptr);
-        uint16_t GetOffset(uint16_t index);
-        void SetOffset(uint16_t index, uint16_t offset);
-        uint16_t KvPos(uint16_t index);
-        std::vector<uint8_t> GetKey(uint16_t index);
-        std::vector<uint8_t> GetVal(uint16_t index); 
-        void AppendKV(uint16_t index, uint64_t ptr, std::vector<uint8_t> key, std::vector<uint8_t> val);
-        EncodedBNode leafInsert(uint16_t index, std::vector<uint8_t> key, std::vector<uint8_t> val);
-        EncodedBNode leafupdate(uint16_t index, std::vector<uint8_t> key, std::vector<uint8_t> val);
-        void appendRange(EncodedBNode source_node, uint16_t dst_index, uint16_t src_index, uint16_t n);
-        uint16_t NodeLookup(std::vector<uint8_t> key);
-        std::vector<EncodedBNode> NodeSplit();
-        std::vector<EncodedBNode> FullNodeSplit();
-        EncodedBNode LeafDelete(uint16_t index);
-        uint16_t NBytes();
-        void PrintBuffer();
-
-        EncodedBNode leafDelete(uint16_t index);
-        static EncodedBNode nodeMerge(EncodedBNode left, EncodedBNode right);
-        EncodedBNode mergeLinks(uint16_t index, uint64_t ptr, std::vector<uint8_t> key);
-
-};
+        BPlusNode(BNodeType type);
+        uint16_t GetBytes();
 
 
-class C {
-    public:
-        C();
-        std::map<std::string, std::string> ref;
-        std::map<uint64_t, EncodedBNode> pages;
-};
+        bool HasKey(vector<uint8_t> key);
+        uint16_t FindIndexBefore(vector<uint8_t> key);
 
-class BTree {
-    public: 
-        BTree(C disk);
-        uint64_t root;
-        EncodedBNode GetPage(uint64_t pointer);
-        uint64_t NewPage(EncodedBNode node);
-        void DeletePage(uint64_t pointer);
+        BPlusNode InsertKV(vector<uint8_t> key, vector<uint8_t> value);
+        BPlusNode InsertKV(vector<uint8_t> key, uint64_t pointer);
+        BPlusNode DeleteKV(vector<uint8_t> key);
+        BPlusNode UpdateKV(vector<uint8_t> key, vector<uint8_t> value);
 
-        EncodedBNode TreeInsert(EncodedBNode node, std::vector<uint8_t> key, std::vector<uint8_t> val);
-        void ReplaceChildren(EncodedBNode node, uint16_t index, std::vector<EncodedBNode> children);
-
-        void Insert(std::vector<uint8_t> key, std::vector<uint8_t> val);
-        void Delete(std::vector<uint8_t> key);
-        
-        std::tuple<int, EncodedBNode> ShouldMerge(EncodedBNode node, uint16_t index, EncodedBNode updated);
-
-        EncodedBNode nodeDelete(EncodedBNode node, uint16_t index, std::vector<uint8_t> key);
-        EncodedBNode treeDelete(EncodedBNode node, std::vector<uint8_t> key);
+        void PrintNodeData();
+    
     private:
-        C disk;
+        // type | key_count | key_offsets    | value_offsets  | keys | pointers/values |
+        // 1B   | 2B        | key_count * 2B | key_count * 2B | nB   | nB              |
+        BNodeType type;
+        vector<vector<uint8_t>> keys;
+        vector<uint64_t> pointers;
+        vector<vector<uint8_t>> values;            
 
 };
-
