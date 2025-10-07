@@ -7,6 +7,7 @@
 #include <ios>
 #include <iostream>
 #include <iterator>
+#include <ostream>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <vector>
@@ -57,7 +58,7 @@ BPlusNode BPlusNode::InsertKV(vector<uint8_t> key, vector<uint8_t> value) {
     return *this;
 }
 
-BPlusNode BPlusNode::InsertKV(vector<uint8_t> key, uint64_t pointer) {
+BPlusNode BPlusNode::InsertKV(vector<uint8_t> key, uint8_t* pointer) {
     int place_at = keys.size();
     for (int i = 0; i < keys.size(); i++) {
         if(keys[i] > key) {
@@ -75,6 +76,16 @@ BPlusNode BPlusNode::UpdateKV(vector<uint8_t> key, vector<uint8_t> value) {
     for (int i = 0; i < keys.size(); i++) {
         if(keys[i] == key) {
             values[i] = value;
+            break;
+        }
+    }
+    return *this;
+}
+
+BPlusNode BPlusNode::UpdateKV(vector<uint8_t> key, uint8_t* pointer) {
+    for (int i = 0; i < keys.size(); i++) {
+        if(keys[i] == key) {
+            pointers[i] = pointer;
             break;
         }
     }
@@ -110,10 +121,10 @@ vector<uint8_t> BPlusNode::Serialize() {
     serialized.push_back(cumulative_offset);
     // Value offsets
     if(type == BNodeType::NODE) {
-        for(int i = 0; i < keys.size() + 1; i++) {
+        for(int i = 0; i < keys.size(); i++) {
             serialized.push_back(cumulative_offset >> 8);
             serialized.push_back(cumulative_offset);
-            cumulative_offset += 4;
+            cumulative_offset += 8;
         }
         serialized.push_back(cumulative_offset >> 8);
         serialized.push_back(cumulative_offset);
@@ -132,10 +143,10 @@ vector<uint8_t> BPlusNode::Serialize() {
     }
     if(type == BNodeType::NODE) {
         for(auto ptr : pointers) {
-            serialized.push_back(ptr >> 24);
-            serialized.push_back(ptr >> 16);
-            serialized.push_back(ptr >> 8);
-            serialized.push_back(ptr);
+            auto ptr_num = reinterpret_cast<intptr_t>(ptr);
+            for(int i = 56; i >= 0; i -= 8) {
+                serialized.push_back(ptr_num >> i);
+            }
         }
     }
     else {
@@ -146,6 +157,46 @@ vector<uint8_t> BPlusNode::Serialize() {
     // serialized.resize(4096);
 
     return serialized;
+}
+
+BPlusNode::BPlusNode(uint8_t* data) {
+    type = static_cast<BNodeType>(data[0]);
+
+    uint16_t key_count = 0;
+    key_count += data[1] << 8;
+    key_count += data[2];
+
+    uint16_t keys_start = 3 + (key_count + 1) * 4;
+    for(int i = 0; i < key_count * 2; i += 2) {
+        uint16_t start_offset = (data[i + 3] << 8) + data[i + 4];
+        uint16_t end_offset = (data[i + 5] << 8) + data[i + 6];
+        vector<uint8_t> key;
+        key.reserve(end_offset - start_offset);
+        std::copy(data + keys_start + start_offset, data + keys_start + end_offset, std::back_inserter(key));
+        keys.push_back(key);
+    }
+    uint16_t values_offsets = 3 + (key_count + 1) * 2;
+    for(int i = 0; i < key_count * 2; i += 2) {
+        uint16_t start_offset = (data[i + values_offsets] << 8) + data[i + values_offsets + 1];
+        uint16_t end_offset = (data[i + values_offsets + 2] << 8) + data[i + values_offsets + 3];
+        if(type == BNodeType::LEAF) {
+            vector<uint8_t> value;
+            value.reserve(end_offset - start_offset);
+            std::copy(data + keys_start + start_offset, data + keys_start + end_offset, std::back_inserter(value));
+            values.push_back(value);
+        }
+        else {
+            intptr_t ptr_num = 0;
+            int offset = 0;
+            for(int i = 56; i >= 0; i -= 8) {
+                uint64_t new_segment = static_cast<uint64_t>(data[keys_start + start_offset + offset]) << i;
+                ptr_num += new_segment;
+                offset++;
+            }
+            pointers.push_back(reinterpret_cast<uint8_t*>(ptr_num));
+        }
+    }
+
 }
 
 // Deserialize constructor
@@ -169,10 +220,20 @@ BPlusNode::BPlusNode(vector<uint8_t> data) {
     for(int i = 0; i < key_count * 2; i += 2) {
         uint16_t start_offset = (data[i + values_offsets] << 8) + data[i + values_offsets + 1];
         uint16_t end_offset = (data[i + values_offsets + 2] << 8) + data[i + values_offsets + 3];
-        vector<uint8_t> value;
-        value.reserve(end_offset - start_offset);
-        std::copy(data.begin() + keys_start + start_offset, data.begin() + keys_start + end_offset, std::back_inserter(value));
-        values.push_back(value);
+        if(type == BNodeType::LEAF) {
+            vector<uint8_t> value;
+            value.reserve(end_offset - start_offset);
+            std::copy(data.begin() + keys_start + start_offset, data.begin() + keys_start + end_offset, std::back_inserter(value));
+            values.push_back(value);
+        }
+        else {
+            uint64_t ptr_num = 0;
+            ptr_num += data[keys_start + start_offset] << 24;
+            ptr_num += data[keys_start + start_offset + 1] << 16;
+            ptr_num += data[keys_start + start_offset + 2] << 8;
+            ptr_num += data[keys_start + start_offset + 3];
+            pointers.push_back(reinterpret_cast<uint8_t*>(ptr_num));
+        }
     }
 }
 
@@ -184,26 +245,103 @@ void BPlusNode::PrintNodeData() {
         for(auto c : keys[i]) {
             std::cout << std::hex << c;
         }
-        std::cout << ", Value: ";
-        for(auto c : values[i]) {
-            std::cout << std::hex << c;
+        if(type == BNodeType::LEAF) {
+            std::cout << ", Value: ";
+            for(auto c : values[i]) {
+                std::cout << std::hex << c;
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
+        else {
+            std::cout << ", Pointer: ";
+            std::cout << std::hex << (uint64_t)pointers[i];
+            std::cout << "\n";
+        }
     }
     std::cout << std::endl;
 }
 
+// BPlusTree
 
-BPlusTree::BPlusTree(std::string filename) {
-    this->filename = filename;
 
-    file_page_count = 16;
-
-    int fd = open(filename.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-    ftruncate(fd, 4096 * file_page_count); // TODO dynamic size
-    file_start_pointer = static_cast<uint8_t*>(mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
-    close(fd);
+BPlusTree::BPlusTree(std::string filename) : manager(filename) {
+    BPlusNode root_node(BNodeType::NODE);
+    auto first_leaf = manager.WriteNode(BPlusNode(BNodeType::LEAF));
+    root_node = root_node.InsertKV({0}, first_leaf); // sentinel key
+    root_pointer = manager.WriteNode(root_node);
 }
+
+vector<uint8_t> BPlusTree::Get(vector<uint8_t> key) {
+
+}
+
+// Finds a node that could contain the key
+BPlusNode BPlusTree::LeafSearch(vector<uint8_t> key, BPlusNode node) {
+    if(node.type == BNodeType::LEAF) {
+        return  node;
+    }
+    int i = 0;
+    for(auto k : node.keys) {
+        if(k <= key) {
+            return LeafSearch(key, manager.GetNode(node.pointers[i]));
+        }
+        i++;
+    }
+    return LeafSearch(key, manager.GetNode(node.pointers.back()));
+}
+
+vector<BPlusNode> BPlusTree::SplitNode(BPlusNode node) {
+    if(node.GetBytes() <= 4096) {
+        return {node};
+    }
+    
+    BPlusNode first(node.type), second(node.type);
+    int first_size, second_size;
+    for(int i = 0; i < node.keys.size(); i++) {
+        if(first_size <= second_size) {
+            if(node.type == BNodeType::LEAF) {
+                first = first.InsertKV(node.keys[i], node.values[i]);
+                first_size += node.keys[i].size() + node.values[i].size();
+            }
+            else {
+                first = first.InsertKV(node.keys[i], node.pointers[i]);
+                first_size += node.keys[i].size() + 8;
+            }
+        }
+        else {
+            if(node.type == BNodeType::LEAF) {
+                second = second.InsertKV(node.keys[i], node.values[i]);
+                second_size += node.keys[i].size() + node.values[i].size();
+            }
+            else {
+                second = second.InsertKV(node.keys[i], node.pointers[i]);
+                second_size += node.keys[i].size() + 8;
+            }
+        }
+    }
+    return  {first, second};
+
+}
+
+void BPlusTree::Insert(vector<uint8_t> key, vector<uint8_t> value) {
+    root_pointer = RecursiveInsert(manager.GetNode(root_pointer), key, value);
+}
+
+uint8_t* BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value) {
+    if(node.type == BNodeType::LEAF) {
+        auto new_node = node.InsertKV(key, value);
+        return manager.WriteNode(new_node);
+    }
+    for(int i = 0; i < node.keys.size(); i++) {
+        if(node.keys[i] <= key) {
+            auto new_node = RecursiveInsert(manager.GetNode(node.pointers[i]), key, value);
+            return manager.WriteNode(node.UpdateKV(node.keys[i], new_node));
+        }
+    }
+    std::cerr << "Shits fucked in RecursiveInsert" << std::endl;
+    return nullptr;
+}
+
 
 // Disk manager
 
@@ -241,8 +379,28 @@ uint8_t* DiskManager::GetFreePage() {
     return page;
 }
 
-void DiskManager::WriteNode(BPlusNode node) {
+uint8_t* DiskManager::WriteNode(BPlusNode node) {
     auto page = GetFreePage();
     auto node_data = node.Serialize();
     std::copy(node_data.begin(), node_data.end(), page);
+    return page;
+}
+
+BPlusNode DiskManager::GetNode(uint8_t* pointer) {
+    return BPlusNode(pointer);
+}
+
+void BPlusTree::PrintTree() {
+    PrintTreeRecursive(manager.GetNode(root_pointer));
+}
+
+void BPlusTree::PrintTreeRecursive(BPlusNode node) {
+    if(node.type == BNodeType::LEAF) {
+        node.PrintNodeData();
+        return;
+    }
+    node.PrintNodeData();
+    for(auto p : node.pointers) {
+        manager.GetNode(p).PrintNodeData();
+    }
 }
