@@ -70,7 +70,7 @@ class DiskManager {
 // Handles Insert, Updata, Delete operations
 class BPlusTree {
     public:
-        BPlusTree(std::string filename);
+        BPlusTree(std::string filename, uint64_t branching_factor);
 
         void Insert(vector<uint8_t> key, vector<uint8_t> value);
         void Update(vector<uint8_t> key, vector<uint8_t> value);
@@ -86,10 +86,12 @@ class BPlusTree {
         BPlusNode LeafSearch(vector<uint8_t> key, BPlusNode node);
 
         vector<BPlusNode> SplitNode(BPlusNode node);
+        BPlusNode MergeNodes(std::vector<BPlusNode> nodes);
 
         std::string filename;
         DiskManager manager;
         uint8_t* root_pointer;
         uint64_t file_page_count;
 
+        uint64_t branching_factor;
 };

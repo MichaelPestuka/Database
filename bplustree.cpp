@@ -266,11 +266,12 @@ void BPlusNode::PrintNodeData() {
 // BPlusTree
 
 
-BPlusTree::BPlusTree(std::string filename) : manager(filename) {
+BPlusTree::BPlusTree(std::string filename, uint64_t branching_factor) : manager(filename) {
     BPlusNode root_node(BNodeType::LEAF);
     // auto first_leaf = manager.WriteNode(BPlusNode(BNodeType::LEAF));
     // root_node = root_node.InsertKV({0}, {0, 0}); // sentinel key
     root_pointer = manager.WriteNode(root_node);
+    this->branching_factor = branching_factor;
 }
 
 vector<uint8_t> BPlusTree::Get(vector<uint8_t> key) {
@@ -292,8 +293,9 @@ BPlusNode BPlusTree::LeafSearch(vector<uint8_t> key, BPlusNode node) {
     return LeafSearch(key, manager.GetNode(node.pointers.back()));
 }
 
+
 vector<BPlusNode> BPlusTree::SplitNode(BPlusNode node) {
-    if(node.GetBytes() <= 4096) {
+    if(node.GetBytes() <= 4096 && branching_factor > node.pointers.size()) {
         return {node};
     }
     
@@ -421,6 +423,7 @@ uint8_t* DiskManager::WriteNode(BPlusNode node) {
     auto page = GetFreePage();
     auto node_data = node.Serialize();
     std::copy(node_data.begin(), node_data.end(), page);
+    msync(page, 4096, MS_SYNC);
     return page;
 }
 
@@ -439,6 +442,6 @@ void BPlusTree::PrintTreeRecursive(BPlusNode node) {
     }
     node.PrintNodeData();
     for(auto p : node.pointers) {
-        manager.GetNode(p).PrintNodeData();
+        PrintTreeRecursive(manager.GetNode(p));
     }
 }
