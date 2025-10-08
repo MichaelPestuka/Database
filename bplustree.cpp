@@ -160,6 +160,8 @@ vector<uint8_t> BPlusNode::Serialize() {
 }
 
 BPlusNode::BPlusNode(uint8_t* data) {
+    this->node_pointer = data;
+
     type = static_cast<BNodeType>(data[0]);
 
     uint16_t key_count = 0;
@@ -265,9 +267,9 @@ void BPlusNode::PrintNodeData() {
 
 
 BPlusTree::BPlusTree(std::string filename) : manager(filename) {
-    BPlusNode root_node(BNodeType::NODE);
-    auto first_leaf = manager.WriteNode(BPlusNode(BNodeType::LEAF));
-    root_node = root_node.InsertKV({0}, first_leaf); // sentinel key
+    BPlusNode root_node(BNodeType::LEAF);
+    // auto first_leaf = manager.WriteNode(BPlusNode(BNodeType::LEAF));
+    // root_node = root_node.InsertKV({0}, {0, 0}); // sentinel key
     root_pointer = manager.WriteNode(root_node);
 }
 
@@ -295,10 +297,11 @@ vector<BPlusNode> BPlusTree::SplitNode(BPlusNode node) {
         return {node};
     }
     
+    
     BPlusNode first(node.type), second(node.type);
     int first_size, second_size;
     for(int i = 0; i < node.keys.size(); i++) {
-        if(first_size <= second_size) {
+        if(i < node.keys.size() / 2) {
             if(node.type == BNodeType::LEAF) {
                 first = first.InsertKV(node.keys[i], node.values[i]);
                 first_size += node.keys[i].size() + node.values[i].size();
@@ -324,22 +327,57 @@ vector<BPlusNode> BPlusTree::SplitNode(BPlusNode node) {
 }
 
 void BPlusTree::Insert(vector<uint8_t> key, vector<uint8_t> value) {
-    root_pointer = RecursiveInsert(manager.GetNode(root_pointer), key, value);
+    auto new_children = RecursiveInsert(manager.GetNode(root_pointer), key, value);
+    if(new_children.size() == 1) {
+        root_pointer = new_children[0].node_pointer;
+    }
+    else {
+        BPlusNode new_root(BNodeType::NODE);
+        for(auto nc : new_children) {
+            auto key = nc.keys[0];
+            new_root = new_root.InsertKV(key, nc.node_pointer);
+        }
+        root_pointer = manager.WriteNode(new_root);
+    }
+    // Else split root TODO
 }
 
-uint8_t* BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value) {
+vector<BPlusNode> BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value) {
     if(node.type == BNodeType::LEAF) {
-        auto new_node = node.InsertKV(key, value);
-        return manager.WriteNode(new_node);
+        if(node.keys.size() == 0) {
+            node = node.InsertKV(key, value);
+            node.node_pointer = manager.WriteNode(node);
+            return {node};
+        }
+        // auto new_node = node.InsertKV(key, value);
+        if(node.HasKey(key)) {
+            node = node.UpdateKV(key, value);
+        }
+        else {
+            node = node.InsertKV(key, value);
+        }
+        auto new_nodes = SplitNode(node);
+        for(auto& n : new_nodes) {
+            n.node_pointer = manager.WriteNode(n);
+        }
+        return new_nodes;
     }
-    for(int i = 0; i < node.keys.size(); i++) {
+    for(int i = node.keys.size() - 1; i >= 0; i--) {
         if(node.keys[i] <= key) {
-            auto new_node = RecursiveInsert(manager.GetNode(node.pointers[i]), key, value);
-            return manager.WriteNode(node.UpdateKV(node.keys[i], new_node));
+            auto new_nodes = RecursiveInsert(manager.GetNode(node.pointers[i]), key, value);
+            node = node.UpdateKV(node.keys[i], new_nodes[0].node_pointer);
+            for(int j = 1; j < new_nodes.size(); j++) {
+                node = node.InsertKV(new_nodes[j].keys.front(), new_nodes[j].node_pointer);
+            }
+            auto split_nodes = SplitNode(node);
+            for(auto& n : split_nodes) {
+                n.node_pointer = manager.WriteNode(n);
+            }
+            return split_nodes;
         }
     }
-    std::cerr << "Shits fucked in RecursiveInsert" << std::endl;
-    return nullptr;
+    std::cerr << "Shits fucked in RecursiveInsert" << std::endl; // TODO
+    return {nullptr};
 }
 
 
@@ -358,7 +396,7 @@ DiskManager::~DiskManager() {
 void DiskManager::SetFilePageCount(uint64_t n_pages) {
     if(n_pages > page_count) {
         ftruncate(file_descriptor, n_pages * 4096);
-        for(int i = page_count; i < page_count + n_pages; i++) {
+        for(int i = page_count; i < n_pages; i++) {
             auto new_mapping = static_cast<uint8_t*>(mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, file_descriptor, i * 4096));
             free_pages.push_back(new_mapping);
         }

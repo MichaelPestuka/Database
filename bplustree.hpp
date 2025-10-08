@@ -39,7 +39,9 @@ class BPlusNode {
         BNodeType type;
         vector<vector<uint8_t>> keys;
         vector<uint8_t*> pointers;
-        vector<vector<uint8_t>> values;            
+        vector<vector<uint8_t>> values;    
+        
+        uint8_t* node_pointer;
     private:
         // type | key_count | key_offsets    | value_offsets  | keys | pointers/values |
         // 1B   | 2B        | key_count * 2B | key_count * 2B | nB   | nB              |
@@ -79,7 +81,7 @@ class BPlusTree {
         vector<uint8_t> Get(vector<uint8_t> key);
 
     private:
-        uint8_t* RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value);
+        vector<BPlusNode> RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value);
         void PrintTreeRecursive(BPlusNode node);
         BPlusNode LeafSearch(vector<uint8_t> key, BPlusNode node);
 
