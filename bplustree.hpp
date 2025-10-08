@@ -2,10 +2,12 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <map>
 #include <vector>
 #include <string>
 
 using std::vector;
+using std::map;
 
 #define BNODE_PAGE_SIZE 4096
 
@@ -37,9 +39,14 @@ class BPlusNode {
         void PrintNodeData();
     
         BNodeType type;
-        vector<vector<uint8_t>> keys;
-        vector<uint8_t*> pointers;
-        vector<vector<uint8_t>> values;    
+
+        map<vector<uint8_t>, vector<uint8_t>> value_map;
+        map<vector<uint8_t>, uint8_t*> pointer_map;
+
+
+        // vector<vector<uint8_t>> keys;
+        // vector<uint8_t*> pointers;
+        // vector<vector<uint8_t>> values;    
         
         uint8_t* node_pointer;
     private:
