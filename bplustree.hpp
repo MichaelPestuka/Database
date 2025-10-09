@@ -1,7 +1,6 @@
 
 #include <cstdint>
 #include <deque>
-#include <fstream>
 #include <map>
 #include <vector>
 #include <string>
@@ -89,6 +88,7 @@ class BPlusTree {
 
     private:
         vector<BPlusNode> RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value);
+        BPlusNode RecursiveDelete(BPlusNode node, vector<uint8_t> key);
         void PrintTreeRecursive(BPlusNode node);
         BPlusNode LeafSearch(vector<uint8_t> key, BPlusNode node);
 

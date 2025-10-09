@@ -2,9 +2,8 @@
 #include "bitutils.hpp"
 #include <algorithm>
 #include <cstdint>
+#include <deque>
 #include <fcntl.h>
-#include <fstream>
-#include <functional>
 #include <ios>
 #include <iostream>
 #include <iterator>
@@ -237,7 +236,38 @@ BPlusTree::BPlusTree(std::string filename, uint64_t branching_factor) : manager(
 }
 
 vector<uint8_t> BPlusTree::Get(vector<uint8_t> key) {
+    auto node = manager.GetNode(root_pointer);
+    while(node.type != BNodeType::LEAF) {
+        for(auto key_val = node.pointer_map.rbegin(); key_val != node.pointer_map.rend(); key_val++) {
+            if(key_val->first <= key) {
+                node = manager.GetNode(key_val->second);
+                break;
+            }
+        }
+    }
+    return node.value_map[key];
+}
 
+void BPlusTree::Delete(vector<uint8_t> key) {
+    auto node = manager.GetNode(root_pointer);
+}
+
+BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
+    if(node.type == BNodeType::LEAF) {
+        node = node.DeleteKV(key);
+        node.node_pointer = manager.WriteNode(node);
+        return node;
+    }
+    for(auto key_val = node.pointer_map.rbegin(); key_val != node.pointer_map.rend(); key_val++)
+    {
+        if(key_val->first <= key) {
+            auto new_node = RecursiveDelete(manager.GetNode(key_val->second), key);
+            node = node.UpdateKV(key_val->first, new_node.node_pointer);
+            node.node_pointer = manager.WriteNode(node);
+        }
+    }
+    std::cerr << "Shits fucked in RecursiveDelete" << std::endl; // TODO
+    return {nullptr};
 }
 
 // Finds a node that could contain the key
@@ -260,7 +290,6 @@ vector<BPlusNode> BPlusTree::SplitNode(BPlusNode node) {
     if(node.GetBytes() <= 4096 && branching_factor > node.pointer_map.size()) {
         return {node};
     }
-    node.PrintNodeData();
     
     BPlusNode first(node.type), second(node.type);
     int first_size, second_size;

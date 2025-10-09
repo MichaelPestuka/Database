@@ -1,6 +1,6 @@
 
 all:
-	g++ -g -std=c++20 *.cpp -o database
+	g++ -g *.cpp -o database
 
 run: all
 	./database
