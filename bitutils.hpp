@@ -17,3 +17,11 @@ template<typename T> T FromCharVector(vector<uint8_t> serialized) {
     }
     return value;
 }
+
+template<typename T> T FromCharPointer(uint8_t* serialized) {
+    T value{};
+    for(int i = 0; i < sizeof(T); i++) {
+        value += ((T)serialized[i]) << (sizeof(T) - i - 1)*8;
+    }
+    return value;
+}

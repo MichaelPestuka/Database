@@ -249,7 +249,7 @@ vector<uint8_t> BPlusTree::Get(vector<uint8_t> key) {
 }
 
 void BPlusTree::Delete(vector<uint8_t> key) {
-    auto node = manager.GetNode(root_pointer);
+    root_pointer = manager.WriteNode(RecursiveDelete(manager.GetNode(root_pointer), key));
 }
 
 BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
@@ -262,8 +262,15 @@ BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
     {
         if(key_val->first <= key) {
             auto new_node = RecursiveDelete(manager.GetNode(key_val->second), key);
-            node = node.UpdateKV(key_val->first, new_node.node_pointer);
+            if(key_val->first != key) {
+                node = node.UpdateKV(key_val->first, new_node.node_pointer);
+            }
+            else {
+                node = node.DeleteKV(key);
+                node = node.InsertKV(key_val->first, new_node.node_pointer);
+            }
             node.node_pointer = manager.WriteNode(node);
+            return node;
         }
     }
     std::cerr << "Shits fucked in RecursiveDelete" << std::endl; // TODO
