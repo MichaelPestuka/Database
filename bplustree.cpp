@@ -16,13 +16,13 @@
 BPlusTree::BPlusTree(std::string filename, uint64_t branching_factor) : manager(filename) {
 
     this->branching_factor = branching_factor;
-    if(manager.GetRoot() != nullptr) { // load existing
+    if(manager.GetRoot() != 0) { // load existing
         root_pointer = manager.GetRoot();
         return;
     }
 
     BPlusNode root_node(BNodeType::LEAF);
-    root_node.InsertKV({0}, {0}); // sentinel
+    root_node.InsertKV({0}, vector<uint8_t>{0}); // sentinel
     root_pointer = manager.WriteNode(root_node);
 }
 
@@ -47,6 +47,7 @@ void BPlusTree::Delete(vector<uint8_t> key) {
 BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
     if(node.type == BNodeType::LEAF) {
         node = node.DeleteKV(key);
+        // manager.MarkPageAsObsolete(node.node_pointer);
         node.node_pointer = manager.WriteNode(node);
         return node;
     }
@@ -60,6 +61,7 @@ BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
             else {
                 node = node.DeleteKV(key);
                 if(new_node.pointer_map.empty() && new_node.value_map.empty()) {
+                    // manager.MarkPageAsObsolete(node.node_pointer);
                     node.node_pointer = manager.WriteNode(node);
                     return node;
                 }
@@ -70,6 +72,7 @@ BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
                     node = node.InsertKV(new_node.pointer_map.begin()->first, new_node.node_pointer);
                 }
             }
+            // manager.MarkPageAsObsolete(node.node_pointer);
             node.node_pointer = manager.WriteNode(node);
             return node;
         }
@@ -141,6 +144,7 @@ vector<BPlusNode> BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key
     if(node.type == BNodeType::LEAF) {
         if(node.value_map.size() == 0) {
             node = node.InsertKV(key, value);
+            // manager.MarkPageAsObsolete(node.node_pointer);
             node.node_pointer = manager.WriteNode(node);
             return {node};
         }
@@ -151,6 +155,7 @@ vector<BPlusNode> BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key
             node = node.InsertKV(key, value);
         }
         auto new_nodes = SplitNode(node);
+        // manager.MarkPageAsObsolete(node.node_pointer);
         for(auto& n : new_nodes) {
             n.node_pointer = manager.WriteNode(n);
         }
@@ -170,6 +175,7 @@ vector<BPlusNode> BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key
                 }
             }
             auto split_nodes = SplitNode(node);
+            // manager.MarkPageAsObsolete(node.node_pointer);
             for(auto& n : split_nodes) {
                 n.node_pointer = manager.WriteNode(n);
             }

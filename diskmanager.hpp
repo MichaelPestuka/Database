@@ -14,11 +14,14 @@ class DiskManager {
     public:
         DiskManager(std::string filename);
         ~DiskManager();
-        uint8_t* GetRoot();
-        void SetRoot(uint8_t* new_root);
-        BPlusNode GetNode(uint8_t* pointer);
-        uint8_t* GetFreePage();
-        uint8_t* WriteNode(BPlusNode node);
+        uint64_t GetRoot();
+        void SetRoot(uint64_t new_root);
+        BPlusNode GetNode(uint64_t pointer);
+        uint64_t GetFreePage();
+        uint64_t WriteNode(BPlusNode node);
+
+        void MarkPageAsObsolete(uint64_t pointer);
+        void FindOrphanedNodes();
 
         void DeleteDataFile();
     private:
@@ -28,9 +31,9 @@ class DiskManager {
         int file_descriptor;
 
         uint8_t* metadata_page;
-        uint8_t* root;
+        uint64_t root;
         uint64_t page_count;
-        deque<uint8_t*> free_pages;
+        deque<uint64_t> free_pages;
 
 };
 

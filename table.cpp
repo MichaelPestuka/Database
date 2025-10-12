@@ -2,9 +2,7 @@
 #include <any>
 #include <cstdint>
 #include <string>
-#include <type_traits>
 #include <typeinfo>
-#include <vector>
 #include "bitutils.hpp"
 
 Table::Table(std::string table_name, uint32_t prefix, vector<DataType> column_schema, vector<std::string> column_names) {

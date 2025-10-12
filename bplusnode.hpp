@@ -28,10 +28,10 @@ class BPlusNode {
         uint16_t FindIndexBefore(vector<uint8_t> key);
 
         BPlusNode InsertKV(vector<uint8_t> key, vector<uint8_t> value);
-        BPlusNode InsertKV(vector<uint8_t> key, uint8_t* pointer);
+        BPlusNode InsertKV(vector<uint8_t> key, uint64_t pointer);
         BPlusNode DeleteKV(vector<uint8_t> key);
         BPlusNode UpdateKV(vector<uint8_t> key, vector<uint8_t> value);
-        BPlusNode UpdateKV(vector<uint8_t> key, uint8_t* pointer);
+        BPlusNode UpdateKV(vector<uint8_t> key, uint64_t pointer);
 
         vector<uint8_t> Serialize();
 
@@ -42,14 +42,14 @@ class BPlusNode {
         BNodeType type;
 
         map<vector<uint8_t>, vector<uint8_t>> value_map;
-        map<vector<uint8_t>, uint8_t*> pointer_map;
+        map<vector<uint8_t>, uint64_t> pointer_map;
 
 
         // vector<vector<uint8_t>> keys;
         // vector<uint8_t*> pointers;
         // vector<vector<uint8_t>> values;    
         
-        uint8_t* node_pointer;
+        uint64_t node_pointer;
     private:
         // type | key_count | key_offsets    | value_offsets  | keys | pointers/values |
         // 1B   | 2B        | key_count * 2B | key_count * 2B | nB   | nB              |

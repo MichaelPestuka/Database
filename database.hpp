@@ -1,7 +1,6 @@
 #include "bplustree.hpp"
 #include "table.hpp"
 #include <cstdint>
-#include <vector>
 
 class DB {
     public: 

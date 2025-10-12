@@ -1,5 +1,6 @@
 #include "bplusnode.hpp"
 #include "bitutils.hpp"
+#include <cstdint>
 #include <iostream>
 #include <sys/types.h>
 
@@ -33,7 +34,7 @@ BPlusNode BPlusNode::InsertKV(vector<uint8_t> key, vector<uint8_t> value) {
     return *this;
 }
 
-BPlusNode BPlusNode::InsertKV(vector<uint8_t> key, uint8_t* pointer) {
+BPlusNode BPlusNode::InsertKV(vector<uint8_t> key, uint64_t pointer) {
     pointer_map[key] = pointer;
 
     return *this;
@@ -44,7 +45,7 @@ BPlusNode BPlusNode::UpdateKV(vector<uint8_t> key, vector<uint8_t> value) {
     return *this;
 }
 
-BPlusNode BPlusNode::UpdateKV(vector<uint8_t> key, uint8_t* pointer) {
+BPlusNode BPlusNode::UpdateKV(vector<uint8_t> key, uint64_t pointer) {
     pointer_map[key] = pointer;
     return *this;
 }
@@ -82,7 +83,7 @@ vector<uint8_t> BPlusNode::Serialize() {
             cumulative_key_offset += key_pointer.first.size();
             cumulative_value_offset += 8;
             serialized_keys.insert(serialized_keys.end(), key_pointer.first.begin(), key_pointer.first.end());
-            auto pointer = ToCharVector(reinterpret_cast<intptr_t>(key_pointer.second));
+            auto pointer = ToCharVector(key_pointer.second);
             serialized_values.insert(serialized_values.end(), pointer.begin(), pointer.end());
         }
         key_offsets.push_back(cumulative_key_offset);
@@ -129,10 +130,10 @@ vector<uint8_t> BPlusNode::Serialize() {
 
 // Deserialize constructor
 BPlusNode::BPlusNode(uint8_t* data) {
-    this->node_pointer = data;
+    // this->node_pointer = data;
 
     vector<vector<uint8_t>> keys, values;
-    vector<uint8_t*> pointers;
+    vector<uint64_t> pointers;
 
     type = static_cast<BNodeType>(data[0]);
 
@@ -160,14 +161,7 @@ BPlusNode::BPlusNode(uint8_t* data) {
             values.push_back(value);
         }
         else {
-            intptr_t ptr_num = 0;
-            int offset = 0;
-            for(int i = 56; i >= 0; i -= 8) {
-                uint64_t new_segment = static_cast<uint64_t>(data[keys_start + start_offset + offset]) << i;
-                ptr_num += new_segment;
-                offset++;
-            }
-            pointers.push_back(reinterpret_cast<uint8_t*>(ptr_num));
+            pointers.push_back(FromCharPointer<uint64_t>(data + keys_start + start_offset));
         }
     }
 

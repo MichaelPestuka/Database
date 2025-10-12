@@ -36,7 +36,7 @@ class BPlusTree {
 
         std::string filename;
         DiskManager manager;
-        uint8_t* root_pointer;
+        uint64_t root_pointer;
         uint64_t file_page_count;
 
         uint64_t branching_factor;
