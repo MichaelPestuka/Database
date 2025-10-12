@@ -1,5 +1,6 @@
 #include "bplustree.hpp"
 #include "bitutils.hpp"
+#include "bplusnode.hpp"
 #include <cstdint>
 #include <fcntl.h>
 #include <iostream>
@@ -13,9 +14,16 @@
 // BPlusTree
 
 BPlusTree::BPlusTree(std::string filename, uint64_t branching_factor) : manager(filename) {
-    BPlusNode root_node(BNodeType::LEAF);
-    root_pointer = manager.WriteNode(root_node);
+
     this->branching_factor = branching_factor;
+    if(manager.GetRoot() != nullptr) { // load existing
+        root_pointer = manager.GetRoot();
+        return;
+    }
+
+    BPlusNode root_node(BNodeType::LEAF);
+    root_node.InsertKV({0}, {0}); // sentinel
+    root_pointer = manager.WriteNode(root_node);
 }
 
 vector<uint8_t> BPlusTree::Get(vector<uint8_t> key) {
@@ -33,6 +41,7 @@ vector<uint8_t> BPlusTree::Get(vector<uint8_t> key) {
 
 void BPlusTree::Delete(vector<uint8_t> key) {
     root_pointer = manager.WriteNode(RecursiveDelete(manager.GetNode(root_pointer), key));
+    manager.SetRoot(root_pointer);
 }
 
 BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
@@ -50,7 +59,16 @@ BPlusNode BPlusTree::RecursiveDelete(BPlusNode node, vector<uint8_t> key) {
             }
             else {
                 node = node.DeleteKV(key);
-                node = node.InsertKV(key_val->first, new_node.node_pointer);
+                if(new_node.pointer_map.empty() && new_node.value_map.empty()) {
+                    node.node_pointer = manager.WriteNode(node);
+                    return node;
+                }
+                if(new_node.type == BNodeType::LEAF) {
+                    node = node.InsertKV(new_node.value_map.begin()->first, new_node.node_pointer);
+                }
+                else {
+                    node = node.InsertKV(new_node.pointer_map.begin()->first, new_node.node_pointer);
+                }
             }
             node.node_pointer = manager.WriteNode(node);
             return node;
@@ -116,6 +134,7 @@ void BPlusTree::Insert(vector<uint8_t> key, vector<uint8_t> value) {
         }
         root_pointer = manager.WriteNode(new_root);
     }
+    manager.SetRoot(root_pointer);
 }
 
 vector<BPlusNode> BPlusTree::RecursiveInsert(BPlusNode node, vector<uint8_t> key, vector<uint8_t> value) {

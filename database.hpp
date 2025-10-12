@@ -12,5 +12,10 @@ class DB {
         DB(std::string filename);
         void CreateTable(Table table);
         void InsertRow(std::string table_name, uint32_t primary_key, vector<std::any> Values);
+        void DeleteRow(std::string table_name, uint32_t primary_key);
         vector<std::any> GetRow(std::string table_name, uint32_t primary_key);
+    
+    private:
+        vector<uint8_t> GetPrefixedKey(std::string table_name, uint32_t primary_key);
+
 };

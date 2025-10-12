@@ -3,6 +3,7 @@
 #include <any>
 #include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <ostream>
 #include <string>
 #include <sys/types.h>
@@ -59,26 +60,19 @@ void DB::InsertRow(std::string table_name, uint32_t primary_key, vector<std::any
     storage.Insert(prefixed_key, serialized_row);
 }
 
+void DB::DeleteRow(std::string table_name, uint32_t primary_key) {
+    storage.Delete(GetPrefixedKey(table_name, primary_key));
+}
+
 vector<std::any> DB::GetRow(std::string table_name, uint32_t primary_key) {
-    vector<uint8_t> prefixed_table_name({'\002'});
-    for(auto c : table_name) {
-        prefixed_table_name.push_back(c);
-    }
-    Table table(storage.Get(prefixed_table_name).data());
-
-    vector<uint8_t> prefixed_key(ToCharVector(table.prefix));
-    for(auto c : ToCharVector(primary_key)) {
-        prefixed_key.push_back(c);
-    }
-
-    vector<uint8_t> serialized = storage.Get(prefixed_key);
+    vector<uint8_t> serialized = storage.Get(GetPrefixedKey(table_name, primary_key));
     uint8_t n_values = serialized[0];
     vector<std::any> deserialized;
     uint32_t current_value_pointer = 1;
 
-    for(auto s : table.schema) {
+    for(int i = 0; i < n_values; i++) {
         Record val(serialized.data() + current_value_pointer);
-        switch (s) {
+        switch (val.type) {
             case INTEGER:
             {
                 current_value_pointer += sizeof(uint64_t) + 2;
@@ -97,4 +91,17 @@ vector<std::any> DB::GetRow(std::string table_name, uint32_t primary_key) {
         deserialized.push_back(val.value);
     }
     return  deserialized;
+}
+
+vector<uint8_t> DB::GetPrefixedKey(std::string table_name, uint32_t primary_key) {
+    vector<uint8_t> prefixed_table_name({'\002'});
+    std::copy(table_name.begin(), table_name.end(), std::back_inserter(prefixed_table_name));
+
+    Table table(storage.Get(prefixed_table_name).data());
+
+    vector<uint8_t> prefixed_key(ToCharVector(table.prefix));
+    for(auto c : ToCharVector(primary_key)) {
+        prefixed_key.push_back(c);
+    }
+    return prefixed_key;
 }
