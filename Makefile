@@ -1,6 +1,6 @@
 
 all:
-	g++ -g *.cpp -o database
+	g++ -g src/*.cpp -o database
 
 run: all
 	./database
